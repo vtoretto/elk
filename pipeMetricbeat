@@ -1,0 +1,24 @@
+input {
+    beats {
+        port => "5069"
+        id => "metricbeat"
+    }
+}
+
+filter {
+    if [metricset] {
+        mutate {
+            add_field => { "[@metadata][elasticIndex]" => "metricbeat" }
+            add_field => { "original_host" => [ "host" ]  }
+            remove_field => [ "host" ]
+        }
+    }
+}
+
+output {
+    elasticsearch {
+
+        hosts => [ "${outputElasticsearchHosts}" ]
+        index => "metricbeat-rtc-%{+YYYY.MM.dd}"
+    }
+}
