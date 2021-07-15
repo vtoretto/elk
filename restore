@@ -1,0 +1,58 @@
+Procedimentos para realizar backup / restore de índices de elasticsearch
+Skip to end of metadata
+
+obs.: trocar todos os 127.0.0.1:10200 pelo host:port do elastic, que no caso do LiNe 5.0 era pmatrd06001q:10200.
+
+
+1) descobrir quais ítens backupiar - pegar o resultado e ordenar no excel por tamanho (store.size, retorno abaixo é em MB):
+
+time curl -H 'content-type: application/json' -XGET "127.0.0.1:10200/_cat/indices/?v&s&bytes=m"
+
+
+2) criar um novo snapshot location. Precisa ser um sub-diretório da variável 'path.repo' na config do elastic:
+
+time curl -H 'content-type: application/json' -XPUT "127.0.0.1:10200/_snapshot/metricbeat-de-2018.03.06-a-2018.04.28" -d '{
+    "type": "fs",
+    "settings": {
+        "location": "/apps/tools/LiNe5.0/backup/elasticsearch/indexes-metricbeat-de-2018.03.06-a-2018.04.28"
+    }
+}'
+
+3) Consultar lugar para criar snapshots (só para ver se foi criado corretamente):
+
+time curl -XGET "127.0.0.1:10200/_snapshot/_all?pretty"
+
+
+4) Criar o snapshot:
+
+time curl -H 'content-type: application/json' -XPUT "127.0.0.1:10200/_snapshot/metricbeat-de-2018.03.06-a-2018.04.28/snapshot1?wait_for_completion=true" -d '{ "indices": "metricbeat-2018.04.28,metricbeat-2018.04.27,metricbeat-2018.04.26,metricbeat-2018.04.25,metricbeat-2018.03.06", "ignore_unavailable": true, "include_global_state": true}'
+obs.: 
+
+metricbeat-de-2018.03.06-a-2018.04.28 é o nome do location criado no passo 2)
+"metricbeat-2018.04.28,metricbeat-2018.04.27,metricbeat-2018.04.26,metricbeat-2018.04.25,metricbeat-2018.03.06" é a lista de nomes dos índices a serem backupiados descobertas no passo 1)
+
+
+5) Apagar indexes backupiados:
+
+time curl -H 'content-type: application/json' -XDELETE '127.0.0.1:10200/metricbeat-2018.04.28,metricbeat-2018.04.27,metricbeat-2018.04.26,metricbeat-2018.04.25,metricbeat-2018.03.06'
+
+
+
+
+6) Liberar espaço:
+
+
+
+Depois disso entre em  'path.repo' e compacte o subdiretório criado no passo 2, apague o diretório descompactado e jogue o zip em outro lugar que tenha mais espaço (a compactação do elastic não é tão boa quando a do zip )
+
+
+
+Caso seja necessário restaurar o backup:
+
+curl -XPOST "localhost:10200/_snapshot/metricbeat-de-2018.03.06-a-2018.04.28/snapshot1/_restore" -H 'Content-Type: application/json' -d '{
+    "indices": "metricbeat-2018.03.06",
+    "ignore_unavailable": false,
+    "include_global_state": true,
+    "rename_pattern": "index_(.+)",
+    "rename_replacement": "restored_index_$1"
+}'
